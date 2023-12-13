@@ -1,13 +1,15 @@
-use crate::Result;
-use bytes::BytesMut;
-use tokio::{net::{TcpListener, TcpStream}, io::{AsyncReadExt, AsyncWriteExt}, spawn};
+use crate::{connection::Connection, Result};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    spawn,
+};
 
 pub struct Listener {
     listener: TcpListener,
 }
 
 pub struct Handler {
-    connection: TcpStream,
+    connection: Connection,
 }
 
 impl Listener {
@@ -21,7 +23,7 @@ impl Listener {
         Ok(Handler::new(connection))
     }
 
-    pub async fn run(&mut self) -> Result<()>{
+    pub async fn run(&mut self) -> Result<()> {
         loop {
             let mut handler = self.accecpt().await?;
             spawn(async move {
@@ -35,18 +37,23 @@ impl Listener {
 
 impl Handler {
     fn new(connection: TcpStream) -> Handler {
-        Handler { connection }
+        Handler {
+            connection: Connection::new(connection),
+        }
     }
 
-    async fn run(&mut self) -> Result<()>{
-        let mut buf = BytesMut::with_capacity(64);
-        let _ = self.connection.read_buf(&mut buf).await?;
-        let recv = String::from_utf8_lossy(&buf[..]);
-        if recv == "ping" {
-            self.connection.write_all("pong".as_bytes()).await?;
-            Ok(())
+    async fn run(&mut self) -> Result<()> {
+        let frame = self.connection.read_frame().await?;
+        if let Some(frame) = frame {
+            if frame == *"ping" {
+                self.connection.write_frame("pong").await?;
+                Ok(())
+            } else {
+                self.connection.write_frame("unknown command").await?;
+                Err("unknown command".into())
+            }
         } else {
-            self.connection.write_all("I don't know".as_bytes()).await?;
+            self.connection.write_frame("I don't know").await?;
             Ok(())
         }
     }
