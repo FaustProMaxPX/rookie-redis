@@ -1,4 +1,4 @@
-use crate::{connection::Connection, Result};
+use crate::{connection::Connection, Frame, Result};
 use tokio::{
     net::{TcpListener, TcpStream},
     spawn,
@@ -45,15 +45,31 @@ impl Handler {
     async fn run(&mut self) -> Result<()> {
         let frame = self.connection.read_frame().await?;
         if let Some(frame) = frame {
-            if frame == *"ping" {
-                self.connection.write_frame("pong").await?;
-                Ok(())
-            } else {
-                self.connection.write_frame("unknown command").await?;
-                Err("unknown command".into())
+            match frame {
+                Frame::Simple(command) => {
+                    if command == "ping" {
+                        self.connection
+                            .write_frame(Frame::into_simple("pong"))
+                            .await?;
+                        Ok(())
+                    } else {
+                        self.connection
+                            .write_frame(Frame::into_simple("unknown command"))
+                            .await?;
+                        Err("unknown command".into())
+                    }
+                }
+                Frame::Error(error) => {
+                    self.connection
+                        .write_frame(Frame::into_simple(&error))
+                        .await?;
+                    Err(error.into())
+                }
             }
         } else {
-            self.connection.write_frame("I don't know").await?;
+            self.connection
+                .write_frame(Frame::into_simple("I don't know"))
+                .await?;
             Ok(())
         }
     }
