@@ -16,3 +16,4 @@ path = "src/bin/client.rs"
 [dependencies]
 tokio = { version = "1.21.2", features = ["full"] }
 bytes = "1.2.1"
+atoi = "2.0.0"

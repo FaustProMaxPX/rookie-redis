@@ -1,10 +1,12 @@
 use bytes::Buf;
 use std::io::Cursor;
+use atoi::atoi;
 
 #[derive(Clone, Debug)]
 pub enum Frame {
     Simple(String),
     Error(String),
+    Array(Vec<Frame>),
 }
 
 #[derive(Debug)]
@@ -18,6 +20,14 @@ impl Frame {
         match Self::get_sign(src)? {
             b'+' | b'-' => {
                 Self::get_line(src)?;
+                Ok(())
+            },
+            b'*' => {
+                let len = Self::get_line(src)?;
+                let len: u64 = atoi::<u64>(len).ok_or_else(|| Error::from("invalid frame type"))?;                                                                                                                                                  
+                for _ in 0..len {
+                    Self::check(src)?;
+                }
                 Ok(())
             }
             _ => Err(Error::Other("invalid frame type".to_string())),
@@ -35,6 +45,16 @@ impl Frame {
                 let line = Self::get_line(src)?;
                 let string = String::from_utf8_lossy(line).to_string();
                 Ok(Frame::Error(string))
+            }
+            b'*' => {
+                let line = Self::get_line(src)?;
+                let len: u64 = atoi::<u64>(line).ok_or_else(|| Error::from("invalid frame type"))?;                                                                                                                                                  
+                let mut arr = vec![];
+                for _ in 0..len {
+                    let frame = Self::parse(src)?;
+                    arr.push(frame);
+                }
+                Ok(Frame::Array(arr))
             }
             _ => Err(Error::Incomplete),
         }
@@ -57,6 +77,14 @@ impl Frame {
         match self {
             Frame::Simple(s) => format!("+{}\r\n", s).into_bytes(),
             Frame::Error(s) => format!("-{}\r\n", s).into_bytes(),
+            Frame::Array(arr) => {
+                let len = arr.len();
+                let mut bytes = format!("*{}\r\n", len).into_bytes();
+                for frame in arr {
+                    bytes.append(&mut frame.into_bytes());
+                }
+                bytes
+            }
         }
     }
 
@@ -79,3 +107,9 @@ impl std::fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+impl From<&str> for Error {
+    fn from(value: &str) -> Self {
+        Error::Other(value.to_string())
+    }
+}
