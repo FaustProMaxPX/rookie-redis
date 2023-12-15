@@ -1,8 +1,11 @@
+use std::time::Duration;
+
 use rookie_redis::Connection;
 use rookie_redis::Frame;
 use rookie_redis::Ping;
 use rookie_redis::Result;
 use tokio::net::TcpStream;
+use tokio::time::sleep;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -17,5 +20,6 @@ async fn main() -> Result<()> {
     } else {
         println!("{:?}", frame.unwrap());
     }
+    sleep(Duration::from_secs(10)).await;
     Ok(())
 }

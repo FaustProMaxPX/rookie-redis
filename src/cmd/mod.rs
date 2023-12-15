@@ -19,7 +19,7 @@ impl Command {
         Ok(cmd)
     }
 
-    pub(crate) async fn execute(&self, connection: &mut crate::Connection) -> Result<()> {
+    pub async fn execute(&self, connection: &mut crate::Connection) -> Result<()> {
         match self {
             Command::Ping(cmd) => cmd.execute(connection).await, 
         }
