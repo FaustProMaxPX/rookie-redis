@@ -8,9 +8,12 @@ mod frame;
 pub use frame::Frame;
 
 mod cmd;
-pub use cmd::{Command, Ping};
+pub use cmd::{Command, Ping, Get};
 
 mod parser;
+
+mod db;
+pub use db::DbHolder;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 

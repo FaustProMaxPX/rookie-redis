@@ -29,6 +29,7 @@ impl Parser {
     pub fn next_string(&mut self) -> Result<String, Error> {
         match self.next()? {
             Frame::Simple(s) => Ok(s),
+            Frame::Bulk(data) => Ok(String::from_utf8_lossy(&data).to_string()),
             frame => Err(format!("can't get a string from {:?}", frame).into()),
         }
     }

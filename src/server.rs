@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::{cmd::Command, connection::Connection, Error, Frame, Result};
+use crate::{cmd::Command, connection::Connection, DbHolder, Error, Frame, Result};
 use tokio::{
-    net::{TcpListener, TcpStream},
+    net::TcpListener,
     spawn,
     sync::Semaphore,
 };
@@ -16,6 +16,7 @@ pub struct Listener {
 
 pub struct Handler {
     connection: Connection,
+    db: Arc<DbHolder>,
 }
 
 impl Listener {
@@ -28,16 +29,17 @@ impl Listener {
         })
     }
 
-    pub async fn accecpt(&self) -> Result<Handler> {
-        let (connection, _) = self.listener.accept().await?;
-        Ok(Handler::new(connection))
-    }
-
     pub async fn run(&mut self) -> Result<()> {
+        let db = Arc::new(DbHolder::new());
         loop {
             let permit = self.semaphore.clone().acquire_owned().await.unwrap();
 
-            let mut handler = self.accecpt().await?;
+            let (socket, _) = self.listener.accept().await?;
+            let mut handler = Handler {
+                connection: Connection::new(socket),
+                db: db.clone(),
+            };
+
             spawn(async move {
                 if let Err(e) = handler.run().await {
                     println!("{}", e);
@@ -51,19 +53,13 @@ impl Listener {
 }
 
 impl Handler {
-    fn new(connection: TcpStream) -> Handler {
-        Handler {
-            connection: Connection::new(connection),
-        }
-    }
-
     async fn run(&mut self) -> Result<()> {
         // TODO: break out the loop when the server shutdown
         loop {
             let frame = self.connection.read_frame().await?;
             if let Some(frame) = frame {
                 let cmd = Command::from_frame(frame)?;
-                cmd.execute(&mut self.connection).await?;
+                cmd.execute(&mut self.connection, &self.db).await?;
             } else {
                 // this means that the client has closed the connection
                 return Ok(());

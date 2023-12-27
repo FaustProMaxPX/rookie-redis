@@ -1,12 +1,14 @@
-use bytes::Buf;
-use std::io::Cursor;
 use atoi::atoi;
+use bytes::{Buf, Bytes};
+use std::io::Cursor;
 
 #[derive(Clone, Debug)]
 pub enum Frame {
     Simple(String),
+    Bulk(Bytes),
     Error(String),
     Array(Vec<Frame>),
+    Null,
 }
 
 #[derive(Debug)]
@@ -21,19 +23,35 @@ impl Frame {
             b'+' | b'-' => {
                 Self::get_line(src)?;
                 Ok(())
-            },
+            }
+            b'$' => {
+                if b'-' == Self::peek_u8(src)? {
+                    // skip "-1\r\n"
+                    let line = Self::get_line(src)?;
+                    if b"-1" != line {
+                        return Err(Error::Other("invalid frame type".to_string()));
+                    }
+                    src.advance(4);
+                } else {
+                    let len = Self::get_number(src)? as usize;
+                    src.advance(len + 2);
+                }
+                Ok(())
+            }
             b'*' => {
                 let len = Self::get_line(src)?;
-                let len: u64 = atoi::<u64>(len).ok_or_else(|| Error::from("invalid frame type"))?;                                                                                                                                                  
+                let len: u64 = atoi::<u64>(len).ok_or_else(|| Error::from("invalid frame type"))?;
                 for _ in 0..len {
                     Self::check(src)?;
                 }
                 Ok(())
             }
+            b'_' => Ok(()),
             _ => Err(Error::Other("invalid frame type".to_string())),
         }
     }
 
+    /// Get a frame from buffer. This method must be invoked after `Frame::check`
     pub fn parse(src: &mut Cursor<&[u8]>) -> Result<Frame, Error> {
         match Self::get_sign(src)? {
             b'+' => {
@@ -46,9 +64,20 @@ impl Frame {
                 let string = String::from_utf8_lossy(line).to_string();
                 Ok(Frame::Error(string))
             }
+            b'$' => {
+                if b'-' == Self::peek_u8(src)? {
+                    src.advance(4);
+                    Ok(Frame::Null)
+                } else {
+                    let len = Self::get_number(src)? as usize;
+                    let data = &src.chunk()[0..len];
+                    Ok(Frame::Bulk(Bytes::copy_from_slice(data)))
+                }
+            }
             b'*' => {
                 let line = Self::get_line(src)?;
-                let len: u64 = atoi::<u64>(line).ok_or_else(|| Error::from("invalid frame type"))?;                                                                                                                                                  
+                let len: u64 =
+                    atoi::<u64>(line).ok_or_else(|| Error::from("invalid frame type"))?;
                 let mut arr = vec![];
                 for _ in 0..len {
                     let frame = Self::parse(src)?;
@@ -56,7 +85,16 @@ impl Frame {
                 }
                 Ok(Frame::Array(arr))
             }
+            b'_' => Ok(Frame::Null),
             _ => Err(Error::Incomplete),
+        }
+    }
+
+    fn peek_u8(src: &mut Cursor<&[u8]>) -> Result<u8, Error> {
+        if !src.has_remaining() {
+            Err(Error::Incomplete)
+        } else {
+            Ok(src.chunk()[0])
         }
     }
 
@@ -73,10 +111,21 @@ impl Frame {
         Err(Error::Incomplete)
     }
 
+    fn get_number(src: &mut Cursor<&[u8]>) -> Result<u64, Error> {
+        let len = Self::get_line(src)?;
+        atoi::<u64>(len).ok_or_else(|| Error::from("invalid number"))
+    }
+
     pub fn into_bytes(self) -> Vec<u8> {
         match self {
             Frame::Simple(s) => format!("+{}\r\n", s).into_bytes(),
             Frame::Error(s) => format!("-{}\r\n", s).into_bytes(),
+            Frame::Bulk(data) => {
+                let len = data.len();
+                let pre = format!("${}\r\n", len).into_bytes();
+                let suffix = "\r\n".as_bytes();
+                [pre, data.to_vec(), suffix.to_vec()].concat()
+            }
             Frame::Array(arr) => {
                 let len = arr.len();
                 let mut bytes = format!("*{}\r\n", len).into_bytes();
@@ -85,6 +134,7 @@ impl Frame {
                 }
                 bytes
             }
+            Frame::Null => "_\r\n".as_bytes().to_vec(),
         }
     }
 
