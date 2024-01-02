@@ -1,11 +1,18 @@
 use atoi::atoi;
 use bytes::{Buf, Bytes};
-use std::io::Cursor;
+use lazy_static::lazy_static;
+use regex::Regex;
+use std::{fmt::Display, io::Cursor};
 
-#[derive(Clone, Debug)]
+lazy_static! {
+    static ref INTEGER: Regex = Regex::new(r"([+|-]?\d+)").unwrap();
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Frame {
     Simple(String),
     Bulk(Bytes),
+    Integer(i64),
     Error(String),
     Array(Vec<Frame>),
     Null,
@@ -38,6 +45,14 @@ impl Frame {
                 }
                 Ok(())
             }
+            b':' => {
+                let line = String::from_utf8_lossy(Self::get_line(src)?);
+                if INTEGER.is_match(&line) {
+                    Ok(())
+                } else {
+                    Err(Error::Other("invalid frame type".to_string()))
+                }
+            }
             b'*' => {
                 let len = Self::get_line(src)?;
                 let len: u64 = atoi::<u64>(len).ok_or_else(|| Error::from("invalid frame type"))?;
@@ -63,6 +78,20 @@ impl Frame {
                 let line = Self::get_line(src)?;
                 let string = String::from_utf8_lossy(line).to_string();
                 Ok(Frame::Error(string))
+            }
+            b':' => {
+                let line = String::from_utf8_lossy(Self::get_line(src)?);
+                INTEGER
+                    .captures(&line)
+                    .and_then(|cap| cap.get(1))
+                    .map_or_else(
+                        || Err(Error::from("invalid frame type")),
+                        |c| {
+                            atoi::<i64>(c.as_str().as_bytes())
+                                .map(Frame::Integer)
+                                .ok_or_else(|| Error::from("invalid frame type"))
+                        },
+                    )
             }
             b'$' => {
                 if b'-' == Self::peek_u8(src)? {
@@ -120,6 +149,7 @@ impl Frame {
         match self {
             Frame::Simple(s) => format!("+{}\r\n", s).into_bytes(),
             Frame::Error(s) => format!("-{}\r\n", s).into_bytes(),
+            Frame::Integer(value) => format!(":{}\r\n", value).into_bytes(),
             Frame::Bulk(data) => {
                 let len = data.len();
                 let pre = format!("${}\r\n", len).into_bytes();
@@ -162,4 +192,35 @@ impl From<&str> for Error {
     fn from(value: &str) -> Self {
         Error::Other(value.to_string())
     }
+}
+
+impl Display for Frame {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Frame::Simple(msg) => write!(f, "{}", msg),
+            Frame::Error(msg) => write!(f, "{}", msg),
+            Frame::Integer(value) => write!(f, "{}", value),
+            Frame::Bulk(data) => write!(f, "{}", String::from_utf8_lossy(data)),
+            Frame::Array(arr) => {
+                write!(f, "[")?;
+                for frame in arr {
+                    write!(f, "{}", frame)?;
+                    write!(f, ",")?;
+                }
+                write!(f, "]")
+            }
+            Frame::Null => write!(f, "null"),
+        }
+    }
+}
+
+#[test]
+fn check_integer_frame_test() {
+    let mut src: Cursor<&[u8]> = Cursor::new(b":-123\r\n");
+    let result = Frame::check(&mut src);
+    assert!(result.is_ok(), "error: {}", result.unwrap_err());
+    src.set_position(0);
+    let result = Frame::parse(&mut src);
+    assert!(result.is_ok(), "error: {}", result.unwrap_err());
+    assert_eq!(Frame::Integer(-123), result.unwrap());
 }

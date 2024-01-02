@@ -17,3 +17,5 @@ path = "src/bin/client.rs"
 tokio = { version = "1.21.2", features = ["full"] }
 bytes = "1.2.1"
 atoi = "2.0.0"
+regex = "1.6.0"
+lazy_static = "1.4.0"
