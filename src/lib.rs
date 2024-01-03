@@ -8,7 +8,7 @@ mod frame;
 pub use frame::Frame;
 
 mod cmd;
-pub use cmd::{Command, Ping, Get};
+pub use cmd::{Command, Ping, Get, Set};
 
 mod parser;
 

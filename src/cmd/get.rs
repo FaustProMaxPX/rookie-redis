@@ -11,7 +11,7 @@ pub struct Get {
 
 impl Get {
 
-    pub fn new(key: &str) -> Get {
+    pub fn new(key: impl ToString) -> Get {
         Get {
             key: key.to_string()
         }

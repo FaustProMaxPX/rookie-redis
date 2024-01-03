@@ -1,5 +1,5 @@
-use std::{collections::HashMap, sync::Mutex};
-
+use std::{collections::HashMap, sync::Mutex, time::Duration};
+use crate::Result;
 use bytes::Bytes;
 
 pub struct DbHolder {
@@ -19,6 +19,11 @@ impl DbHolder {
 
     pub fn get(&self, key: &str) -> Option<Bytes> {
         self.holder.lock().unwrap().entries.get(key).cloned()
+    }
+
+    pub fn set(&self, key: String, value: Bytes, expiration: Option<Duration>) -> Result<()> {
+        self.holder.lock().unwrap().entries.insert(key, value);
+        Ok(()) 
     }
 }
 
