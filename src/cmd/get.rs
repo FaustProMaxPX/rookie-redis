@@ -1,24 +1,20 @@
-use std::sync::Arc;
-
 use bytes::Bytes;
 
-use crate::{Connection, Frame, DbHolder, Result};
-
+use crate::{Connection, DbHolder, Frame, Result};
 
 pub struct Get {
-    key: String
+    key: String,
 }
 
 impl Get {
-
     pub fn new(key: impl ToString) -> Get {
         Get {
-            key: key.to_string()
+            key: key.to_string(),
         }
     }
 
-    pub async fn execute(&self, connection: &mut Connection, db: &Arc<DbHolder>) -> Result<()> {
-        let value = db.get(&self.key); 
+    pub async fn execute(&self, connection: &mut Connection, db: &DbHolder) -> Result<()> {
+        let value = db.get(&self.key);
         if let Some(value) = value {
             Self::write_response(connection, value).await
         } else {

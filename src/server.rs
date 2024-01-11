@@ -7,7 +7,7 @@ use tokio::{
     sync::Semaphore,
 };
 
-const MAX_LIMIT_CONNECTIONS: usize = 1;
+const MAX_LIMIT_CONNECTIONS: usize = 10;
 
 pub struct Listener {
     listener: TcpListener,
@@ -16,7 +16,7 @@ pub struct Listener {
 
 pub struct Handler {
     connection: Connection,
-    db: Arc<DbHolder>,
+    db: DbHolder,
 }
 
 impl Listener {
@@ -30,7 +30,7 @@ impl Listener {
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        let db = Arc::new(DbHolder::new());
+        let db = DbHolder::new();
         loop {
             let permit = self.semaphore.clone().acquire_owned().await.unwrap();
 

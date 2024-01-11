@@ -1,4 +1,4 @@
-use std::{time::Duration, sync::Arc};
+use std::time::Duration;
 
 use bytes::Bytes;
 
@@ -19,7 +19,7 @@ impl Set {
         }
     }
 
-    pub async fn execute(self, db: &Arc<DbHolder>, connection: &mut Connection) -> Result<()> {
+    pub async fn execute(self, db: &DbHolder, connection: &mut Connection) -> Result<()> {
         db.set(self.key, self.value, self.expiration)?;
         connection.write_frame(Frame::into_simple("OK")).await 
     }

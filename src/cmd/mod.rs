@@ -1,5 +1,5 @@
 mod ping;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 pub use ping::Ping;
 
@@ -45,7 +45,7 @@ impl Command {
         Ok(cmd)
     }
 
-    pub async fn execute(self, connection: &mut Connection, db: &Arc<DbHolder>) -> Result<()> {
+    pub async fn execute(self, connection: &mut Connection, db: &DbHolder) -> Result<()> {
         match self {
             Command::Ping(cmd) => cmd.execute(connection).await,
             Command::Get(cmd) => cmd.execute(connection, db).await,
