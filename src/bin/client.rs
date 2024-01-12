@@ -1,10 +1,13 @@
 
+use std::time::Duration;
+
 use bytes::Bytes;
 use rookie_redis::Connection;
 use rookie_redis::Frame;
 use rookie_redis::Result;
 use rookie_redis::{Get, Set};
 use tokio::net::TcpStream;
+use tokio::time::sleep;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -14,6 +17,7 @@ async fn main() -> Result<()> {
         .write_frame(Set::get_frame("foo", Bytes::copy_from_slice(b"bar"), None))
         .await?;
     read_resp(&mut connection).await?;
+    sleep(Duration::from_secs(10)).await;
     connection.write_frame(Get::get_frame("foo")).await?;
     read_resp(&mut connection).await?;
     Ok(())

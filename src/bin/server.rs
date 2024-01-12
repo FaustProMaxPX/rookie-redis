@@ -1,11 +1,10 @@
-use rookie_redis::{Listener, Result};
+use rookie_redis::{Result, server};
+use tokio::signal::ctrl_c;
 
 const DEFAULT_ADDR: &str = "127.0.0.1:6379";
 
 #[tokio::main]
 async fn main() -> Result<()>{
-    let mut listener = Listener::new(DEFAULT_ADDR).await?;
-    println!("server has started");
-    listener.run().await?;
+    server::run(DEFAULT_ADDR, ctrl_c()).await?;
     Ok(())
 }

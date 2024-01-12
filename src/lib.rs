@@ -1,4 +1,4 @@
-mod server;
+pub mod server;
 pub use server::{Handler, Listener};
 
 mod connection;
