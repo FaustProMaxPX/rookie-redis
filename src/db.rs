@@ -8,7 +8,7 @@ use std::{
 };
 use tokio::{
     select, spawn,
-    sync::{broadcast, mpsc},
+    sync::{broadcast, mpsc, Notify},
     time::{sleep, Instant},
 };
 
@@ -21,10 +21,12 @@ pub struct DbHolder {
 
 pub struct SharedDb {
     database: Mutex<Database>,
+    clean_task_notifier: Arc<Notify>,
 }
 
 struct DbCleaner {
     db: Arc<SharedDb>,
+    clean_task_notifier: Arc<Notify>,
     shutdown_notifier: broadcast::Receiver<()>,
     _shutdown_completed_tx: mpsc::Sender<()>,
 }
@@ -39,8 +41,10 @@ impl DbHolder {
         shutdown_notifier: broadcast::Receiver<()>,
         shutdown_completed_tx: mpsc::Sender<()>,
     ) -> DbHolder {
+        let notifier = Arc::new(Notify::new());
         let holder = Arc::new(SharedDb {
             database: Mutex::new(Database::new()),
+            clean_task_notifier: notifier.clone(),
         });
 
         let db = holder.clone();
@@ -49,6 +53,7 @@ impl DbHolder {
                 db,
                 shutdown_notifier,
                 _shutdown_completed_tx: shutdown_completed_tx,
+                clean_task_notifier: notifier.clone(),
             };
             cleaner.clean_expired_keys().await;
         });
@@ -69,9 +74,23 @@ impl DbHolder {
         let mut db = self.holder.database.lock().unwrap();
         let _prev = db.entries.insert(key.clone(), value);
         db.expiration.remove(&key);
+
+        let next_expiration_time = db.expiration.values().min().cloned();
+
         if let Some(dur) = expiration {
             let expire_time = Instant::now().add(dur);
             db.expiration.insert(key, expire_time);
+        }
+
+        if let Some(next_expiration_time) = next_expiration_time {
+            if expiration.is_none() {
+                self.holder.clean_task_notifier.notify_one();
+            } else if let Some(expiration) = expiration {
+                let expiration = Instant::now() + expiration;
+                if expiration < next_expiration_time {
+                    self.holder.clean_task_notifier.notify_one();
+                }
+            }
         }
 
         Ok(())
@@ -109,8 +128,8 @@ impl DbCleaner {
                     return;
                 },
                 _ = sleep(sleep_time) => {},
+                _ = self.clean_task_notifier.notified() => {},
             }
-            // TODO: wake up if a new key coming
         }
     }
 }
@@ -134,13 +153,22 @@ mod tests {
         let (shutdown_tx, _) = broadcast::channel(1);
         let (shutdown_completed_tx, mut shutdown_completed_rx) = mpsc::channel(1);
         let dbhodler = DbHolder::new(shutdown_tx.subscribe(), shutdown_completed_tx.clone());
-        dbhodler.set(
-            "test".to_string(),
-            Bytes::from_static(b"h"),
-            Some(Duration::from_secs(1)),
-        ).unwrap();
+        dbhodler
+            .set(
+                "test".to_string(),
+                Bytes::from_static(b"h"),
+                Some(Duration::from_secs(3)),
+            )
+            .unwrap();
+        dbhodler
+            .set(
+                "test2".to_string(),
+                Bytes::from_static(b"h"),
+                Some(Duration::from_secs(1)),
+            )
+            .unwrap();
         assert_eq!(dbhodler.get("test"), Some(Bytes::from_static(b"h")));
-        sleep(Duration::from_secs(2)).await;
+        sleep(Duration::from_secs(4)).await;
         assert_eq!(dbhodler.get("test"), None);
         shutdown_tx.send(()).unwrap();
         drop(shutdown_completed_tx);
