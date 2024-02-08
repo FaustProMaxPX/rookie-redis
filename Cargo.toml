@@ -19,3 +19,4 @@ bytes = "1.2.1"
 atoi = "2.0.0"
 regex = "1.6.0"
 lazy_static = "1.4.0"
+clap = { version = "4.4.18", features = ["derive"]}
