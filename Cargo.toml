@@ -10,8 +10,8 @@ name = "server"
 path = "src/bin/server.rs"
 
 [[bin]]
-name = "client"
-path = "src/bin/client.rs"
+name = "cli"
+path = "src/bin/cli.rs"
 
 [dependencies]
 tokio = { version = "1.21.2", features = ["full"] }

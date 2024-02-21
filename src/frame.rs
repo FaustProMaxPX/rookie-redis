@@ -99,8 +99,9 @@ impl Frame {
                     Ok(Frame::Null)
                 } else {
                     let len = Self::get_number(src)? as usize;
-                    let data = &src.chunk()[0..len];
-                    Ok(Frame::Bulk(Bytes::copy_from_slice(data)))
+                    let data = Bytes::copy_from_slice(&src.chunk()[..len]); 
+                    src.advance(len + 2);
+                    Ok(Frame::Bulk(data))
                 }
             }
             b'*' => {

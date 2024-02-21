@@ -16,6 +16,7 @@ mod db;
 pub use db::DbHolder;
 
 mod client;
+pub use client::BlockingClient;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
