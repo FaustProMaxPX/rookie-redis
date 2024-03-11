@@ -1,9 +1,11 @@
 use std::time::Duration;
 
 use bytes::Bytes;
+use tracing::instrument;
 
 use crate::{DbHolder, Connection, Result, Frame};
 
+#[derive(Debug)]
 pub struct Set {
     key: String,
     value: Bytes,
@@ -19,6 +21,7 @@ impl Set {
         }
     }
 
+    #[instrument(skip(db, connection))]
     pub async fn execute(self, db: &DbHolder, connection: &mut Connection) -> Result<()> {
         db.set(self.key, self.value, self.expiration)?;
         connection.write_frame(Frame::into_simple("OK")).await 

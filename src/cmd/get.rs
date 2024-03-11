@@ -1,7 +1,9 @@
 use bytes::Bytes;
+use tracing::instrument;
 
 use crate::{Connection, DbHolder, Frame, Result};
 
+#[derive(Debug)]
 pub struct Get {
     key: String,
 }
@@ -13,6 +15,7 @@ impl Get {
         }
     }
 
+    #[instrument(skip(db, connection))]
     pub async fn execute(&self, connection: &mut Connection, db: &DbHolder) -> Result<()> {
         let value = db.get(&self.key);
         if let Some(value) = value {

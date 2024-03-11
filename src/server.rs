@@ -6,6 +6,7 @@ use tokio::{
     select, spawn,
     sync::{broadcast, mpsc, Semaphore},
 };
+use tracing::instrument;
 
 const MAX_LIMIT_CONNECTIONS: usize = 10;
 
@@ -98,6 +99,7 @@ impl Listener {
 }
 
 impl Handler {
+    #[instrument(skip(self))]
     async fn run(&mut self) -> Result<()> {
         loop {
             let frame = select! {
